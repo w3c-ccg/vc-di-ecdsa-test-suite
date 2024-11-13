@@ -5,7 +5,9 @@
 import * as bs58 from 'base58-universal';
 import * as bs64 from 'base64url-universal';
 import {createRequire} from 'node:module';
+import {isUtf8} from 'node:buffer';
 import {klona} from 'klona';
+import {readFileSync} from 'fs';
 import {v4 as uuidv4} from 'uuid';
 
 export const require = createRequire(import.meta.url);
@@ -89,8 +91,8 @@ export const createDisclosedVc = async ({
 export const endpointCheck = ({endpoint, vcVersion, keyType}) => {
   const {
     supportedEcdsaKeyTypes,
-    // assume support for vc 1.1
-    supports = {vc: ['1.1']}
+    // assume support for vc 2.0
+    supports = {vc: ['2.0']}
   } = endpoint.settings;
   // if an issuer does not support the current keyType skip it
   const keyTypes = supportedEcdsaKeyTypes || supports?.keyTypes;
@@ -208,11 +210,76 @@ export function getColumnNameForTestCategory(testCategory) {
   }
 }
 
-export function setupReportableTestSuite(runnerContext, name) {
+export function setupReportableTestSuite(
+  runnerContext,
+  name = 'Implementation'
+) {
   runnerContext.matrix = true;
   runnerContext.report = true;
   runnerContext.rowLabel = 'Test Name';
   runnerContext.columnLabel = name;
-
   runnerContext.implemented = [];
+}
+
+export function isValidUtf8(string) {
+  const textEncoder = new TextEncoder();
+  const uint8Array = textEncoder.encode(string);
+  if(!isUtf8(uint8Array)) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+export function isValidDatetime(dateString) {
+  return !isNaN(Date.parse(dateString));
+}
+
+export const config = JSON.parse(readFileSync('./config/runner.json'));
+
+export function createValidCredential(version = 2) {
+  let credential = {
+    type: ['VerifiableCredential'],
+    id: `urn:uuid:${uuidv4()}`,
+    credentialSubject: {id: 'did:example:alice'}
+  };
+  if(version === 1) {
+    // add v1.1 context and issuanceDate
+    credential = Object.assign({}, {
+      '@context': [
+        'https://www.w3.org/2018/credentials/v1',
+        'https://w3id.org/security/data-integrity/v2'
+      ],
+      issuanceDate: ISOTimeStamp()
+    }, credential);
+  } else if(version === 2) {
+    // add v2 context
+    credential = Object.assign({}, {
+      '@context': [
+        'https://www.w3.org/ns/credentials/v2'
+      ]
+    }, credential);
+  } else {
+    return null;
+  }
+  return credential;
+}
+
+export function setupRow() {
+  // append test meta data to the it/test this.
+  this.currentTest.cell = {
+    columnId: this.currentTest.parent.title,
+    rowId: this.currentTest.title
+  };
+}
+
+export function getProofs(issuedVc) {
+  // if the implementation failed to issue a VC or to sign the VC,
+  // return an empty array
+  if(!issuedVc?.proof) {
+    return [];
+  }
+  const proofs = Array.isArray(issuedVc?.proof) ?
+    issuedVc.proof : [issuedVc?.proof];
+  return proofs;
 }
