@@ -15,6 +15,7 @@ import {createInitialVc} from '../helpers.js';
 import {expect} from 'chai';
 import {getMultiKey} from '../vc-generator/key-gen.js';
 import {getSuites} from './helpers.js';
+import {invalidCborTagProxy} from './proxies.js';
 
 export function sd2023Algorithms({
   credential,
@@ -161,8 +162,11 @@ export function sd2023Algorithms({
           'NOT be used on any of the components. Append the produced encoded ' +
           'value to proofValue.', async function() {
             this.test.link = 'https://w3c.github.io/vc-di-ecdsa/#selective-disclosure-functions:~:text=and%20mandatoryPointers.-,CBOR%2Dencode%20components%20per%20%5BRFC8949%5D%20where%20CBOR%20tagging%20MUST,-NOT%20be%20used';
-            this.test.cell.skipMessage = 'Not Implemented';
-            this.skip();
+            await assertions.verificationFail({
+              verifier,
+              credential: fixtures.get(keyType).get('invalidCborTag'),
+              reason: 'Should not verify proofValue created with cbor tag'
+            });
           });
           it('If the proofValue string does not start with u, indicating ' +
           'that it is a multibase-base64url-no-pad-encoded value, an error ' +
@@ -344,7 +348,7 @@ async function _setup({
   const _credential = structuredClone(credential);
   _credential.issuer = keyPair.controller;
   credentials.set('invalidCreated', await issueCloned(invalidCreated({
-    credential: structuredClone(_credential),
+    credential: _credential,
     ...getSuites({
       signer,
       suiteName,
@@ -352,5 +356,16 @@ async function _setup({
       mandatoryPointers
     })
   })));
+  const cborTagSuites = getSuites({
+    signer,
+    suiteName,
+    selectivePointers,
+    mandatoryPointers
+  });
+  credentials.set('invalidCborTag', await issueCloned({
+    credential: _credential,
+    suite: cborTagSuites.suite,
+    selectiveSuite: invalidCborTagProxy(cborTagSuites.selectiveSuite)
+  }));
   return credentials;
 }
