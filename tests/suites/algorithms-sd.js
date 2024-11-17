@@ -8,14 +8,15 @@ import {
   issueCloned
 } from 'data-integrity-test-suite-assertion';
 import {
-  shouldBeBs64UrlNoPad,
-  shouldHaveHeaderBytes,
-} from '../assertions.js';
-import {createInitialVc} from '../helpers.js';
+  createInitialVc,
+  encodeBs64Url,
+  getBs64UrlBytes
+} from '../helpers.js';
 import {expect} from 'chai';
 import {getMultiKey} from '../vc-generator/key-gen.js';
 import {getSuites} from './helpers.js';
 import {invalidCborTagProxy} from './proxies.js';
+import {shouldBeBaseProofValue} from '../assertions.js';
 
 export function sd2023Algorithms({
   credential,
@@ -93,38 +94,8 @@ export function sd2023Algorithms({
           'specific cryptosuite proof generation algorithm.', async function() {
             this.test.link = 'https://w3c.github.io/vc-di-ecdsa/#base-proof-serialization-ecdsa-sd-2023:~:text=When%20generating%20ECDSA%20signatures%2C%20the%20signature%20value%20MUST%20be%20expressed%20according%20to%20section%207';
             assertIssuer();
-            const _proof = proofs.find(p =>
-              p?.cryptosuite === 'ecdsa-sd-2023');
-            expect(
-              _proof,
-              `Expected VC from issuer ${name} to have an ' +
-              '"ecdsa-sd-2023" proof`).to.exist;
-            expect(
-              _proof.proofValue,
-              `Expected VC from issuer ${name} to have a ' +
-              '"proof.proofValue"`
-            ).to.exist;
-            expect(
-              _proof.proofValue,
-              `Expected VC "proof.proofValue" from issuer ${name} to be ` +
-              'a string.'
-            ).to.be.a.string;
-            //Ensure the proofValue string starts with u, indicating that it
-            //is a multibase-base64url-no-pad-encoded value, throwing an
-            //error if it does not.
-            expect(
-              _proof.proofValue.startsWith('u'),
-              `Expected "proof.proofValue" to start with u received ` +
-              `${_proof.proofValue[0]}`).to.be.true;
-            // now test the encoding which is bs64 url no pad for this suite
-            expect(
-              shouldBeBs64UrlNoPad(_proof.proofValue),
-              'Expected "proof.proofValue" to be bs64 url no pad encoded.'
-            ).to.be.true;
-            await shouldHaveHeaderBytes(
-              _proof.proofValue,
-              new Uint8Array([0xd9, 0x5d, 0x00])
-            );
+            const proof = proofs.find(p => p?.cryptosuite === 'ecdsa-sd-2023');
+            await shouldBeBaseProofValue({proof, name});
           });
           it('If source has an id that is not a blank node identifier, set ' +
           'selection.id to its value. Note: All non-blank node identifiers ' +
@@ -173,46 +144,33 @@ export function sd2023Algorithms({
           'MUST be raised and SHOULD convey an error type of ' +
           'PROOF_VERIFICATION_ERROR.', async function() {
             this.test.link = 'https://w3c.github.io/vc-di-ecdsa/#selective-disclosure-functions:~:text=produced%20as%20output.-,If%20the%20proofValue%20string%20does%20not%20start%20with%20u%2C%20indicating%20that%20it%20is%20a%20multibase%2Dbase64url%2Dno%2Dpad%2Dencoded%20value%2C%20an%20error%20MUST%20be%20raised%20and%20SHOULD%20convey%20an%20error%20type%20of%20PROOF_VERIFICATION_ERROR.,-Initialize%20decodedProofValue%20to';
-            this.test.cell.skipMessage = 'Not Implemented';
-            this.skip();
-            /*
             await assertions.verificationFail({
               verifier,
-              credential: fixtures.get('invalidProofValuePrefix'),
+              credential: fixtures.get(keyType).get('invalidProofValuePrefix'),
               reason: 'Should not verify VC with invalid proofValue prefix'
             });
-            */
           });
           it('If the decodedProofValue does not start with the ECDSA-SD ' +
           'base proof header bytes 0xd9, 0x5d, and 0x00, an error MUST be ' +
           'raised and SHOULD convey an error type of PROOF_VERIFICATION_ERROR.',
           async function() {
             this.test.link = 'https://w3c.github.io/vc-di-ecdsa/#selective-disclosure-functions:~:text=If%20the%20decodedProofValue%20does%20not%20start%20with%20the%20ECDSA%2DSD%20base%20proof%20header%20bytes%200xd9%2C%200x5d%2C%20and%200x00%2C%20an%20error%20MUST%20be%20raised%20and%20SHOULD%20convey%20an%20error%20type%20of%20PROOF_VERIFICATION_ERROR.';
-            this.test.cell.skipMessage = 'Not Implemented';
-            this.skip();
-            /*
-            await assertions.verificationFail({
-              verifier,
-              credential: fixtures.get('invalidBaseProofHeader'),
-              reason: 'Should not verify VC with invalid base proof header'
-            });
-            */
+            assertIssuer();
+            const proof = proofs.find(p => p?.cryptosuite === 'ecdsa-sd-2023');
+            await shouldBeBaseProofValue({proof, name});
           });
           it('If the decodedProofValue does not start with the ECDSA-SD ' +
           'disclosure proof header bytes 0xd9, 0x5d, and 0x01, an error ' +
           'MUST be raised and SHOULD convey an error type of ' +
           'PROOF_VERIFICATION_ERROR.', async function() {
             this.test.link = 'https://w3c.github.io/vc-di-ecdsa/#selective-disclosure-functions:~:text=If%20the%20decodedProofValue%20does%20not%20start%20with%20the%20ECDSA%2DSD%20disclosure%20proof%20header%20bytes%200xd9%2C%200x5d%2C%20and%200x01%2C%20an%20error%20MUST%20be%20raised%20and%20SHOULD%20convey%20an%20error%20type%20of%20PROOF_VERIFICATION_ERROR.';
-            this.test.cell.skipMessage = 'Not Implemented';
-            this.skip();
-            /*
             await assertions.verificationFail({
               verifier,
-              credential: fixtures.get('invalidDisclosureProofHeader'),
+              credential: fixtures.get(keyType).get(
+                'invalidDisclosureProofHeader'),
               reason: 'Should not verify VC with invalid disclosure proof ' +
               'header'
             });
-            */
           });
           it('If the result is not an array of the following five elements ' +
           '— a byte array of length 64; a byte array of length 36; an array ' +
@@ -367,5 +325,31 @@ async function _setup({
     suite: cborTagSuites.suite,
     selectiveSuite: invalidCborTagProxy(cborTagSuites.selectiveSuite)
   }));
+  const securedCredential = await issueCloned({
+    credential: _credential,
+    ...getSuites({
+      signer,
+      suiteName,
+      selectivePointers,
+      mandatoryPointers
+    })
+  });
+  const nonbase64ProofValue = structuredClone(securedCredential);
+  nonbase64ProofValue.proof.proofValue =
+    nonbase64ProofValue.proof.proofValue.substring(1);
+  credentials.set('invalidProofValuePrefix', nonbase64ProofValue);
+  const invalidProofValueHeader = structuredClone(securedCredential);
+  // get the bytes
+  const disclosureBytes = getBs64UrlBytes(
+    invalidProofValueHeader?.proof?.proofValue);
+  // remove the 3 byte prefix and replace with an invalid prefix
+  const invalidBuffer = Buffer.concat(
+    [Buffer.from([0xA1, 0x44, 0x01]), disclosureBytes.slice(3)],
+    disclosureBytes.length
+  );
+  // replace the proofValue with a newer proofValue with an
+  // invalid 3 byte header
+  invalidProofValueHeader.proof.proofValue = `u${encodeBs64Url(invalidBuffer)}`;
+  credentials.set('invalidDisclosureProofHeader', invalidProofValueHeader);
   return credentials;
 }
