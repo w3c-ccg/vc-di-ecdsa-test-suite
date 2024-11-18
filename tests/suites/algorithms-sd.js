@@ -12,6 +12,10 @@ import {
   encodeBs64Url,
   getBs64UrlBytes
 } from '../helpers.js';
+import {
+  parseDisclosureProofValue,
+  serializeProofValue
+} from './stubs.js';
 import {expect} from 'chai';
 import {getMultiKey} from '../vc-generator/key-gen.js';
 import {getSuites} from './helpers.js';
@@ -179,8 +183,11 @@ export function sd2023Algorithms({
           'MUST be raised and SHOULD convey an error type of ' +
           'PROOF_VERIFICATION_ERROR.', async function() {
             this.test.link = 'https://w3c.github.io/vc-di-ecdsa/#selective-disclosure-functions:~:text=array%20of%20integers%20%E2%80%94-,an%20error%20MUST%20be%20raised%20and%20SHOULD%20convey%20an%20error%20type%20of%20PROOF_VERIFICATION_ERROR.,-Replace%20the%20fourth';
-            this.test.cell.skipMessage = 'Not Implemented';
-            this.skip();
+            await assertions.verificationFail({
+              verifier,
+              credential: fixtures.get(keyType).get('invalidProofArray'),
+              reason: 'Should not verify proofValue array missing elements'
+            });
           });
           it('The transformation options MUST contain a type identifier for ' +
           'the cryptographic suite (type), a cryptosuite identifier ' +
@@ -351,5 +358,13 @@ async function _setup({
   // invalid 3 byte header
   invalidProofValueHeader.proof.proofValue = `u${encodeBs64Url(invalidBuffer)}`;
   credentials.set('invalidDisclosureProofHeader', invalidProofValueHeader);
+  const invalidProofArray = structuredClone(securedCredential);
+  // parse the existing disclosure proofValue
+  const params = parseDisclosureProofValue({proof: invalidProofArray.proof});
+  // create a new proofValue missing 3 elements
+  invalidProofArray.proof.proofValue = serializeProofValue({
+    payload: [params.baseSignature, params.publicKey]
+  });
+  credentials.set('invalidProofArray', invalidProofArray);
   return credentials;
 }
